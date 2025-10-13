@@ -19,16 +19,17 @@ from custom_graphgen import CustomGraphGen, create_custom_config
 from graphgen.utils import logger, set_logger
 
 
-def setup_environment():
+def setup_environment(disable_quiz: bool = False):
     """设置环境"""
     # 加载环境变量
     load_dotenv()
     
     # 检查必需的环境变量
-    required_vars = [
-        'SYNTHESIZER_MODEL', 'SYNTHESIZER_API_KEY', 'SYNTHESIZER_BASE_URL',
-        'TRAINEE_MODEL', 'TRAINEE_API_KEY', 'TRAINEE_BASE_URL'
-    ]
+    required_vars = ['SYNTHESIZER_MODEL', 'SYNTHESIZER_API_KEY', 'SYNTHESIZER_BASE_URL']
+    
+    # 如果没有禁用 quiz，则需要 TRAINEE 相关变量
+    if not disable_quiz:
+        required_vars.extend(['TRAINEE_MODEL', 'TRAINEE_API_KEY', 'TRAINEE_BASE_URL'])
     
     missing_vars = []
     for var in required_vars:
@@ -42,9 +43,12 @@ def setup_environment():
         print("SYNTHESIZER_MODEL=gpt-4")
         print("SYNTHESIZER_API_KEY=your_api_key")
         print("SYNTHESIZER_BASE_URL=https://api.openai.com/v1")
-        print("TRAINEE_MODEL=gpt-3.5-turbo")
-        print("TRAINEE_API_KEY=your_api_key")
-        print("TRAINEE_BASE_URL=https://api.openai.com/v1")
+        if not disable_quiz:
+            print("TRAINEE_MODEL=gpt-3.5-turbo")
+            print("TRAINEE_API_KEY=your_api_key")
+            print("TRAINEE_BASE_URL=https://api.openai.com/v1")
+        else:
+            print("# TRAINEE 相关变量在禁用 quiz 时不是必需的")
         return False
     
     return True
@@ -262,7 +266,7 @@ def main():
     args = parser.parse_args()
     
     # 检查环境
-    if not setup_environment():
+    if not setup_environment(disable_quiz=args.disable_quiz or args.quiz_samples == 0):
         return 1
     
     # 检查输入参数

@@ -23,12 +23,58 @@ class CustomGraphGen(GraphGen):
     
     def __post_init__(self):
         """初始化，加载外部知识图谱"""
-        # 先调用父类初始化
-        super().__post_init__()
+        # 先调用父类初始化，但允许 trainee 客户端为空
+        try:
+            super().__post_init__()
+        except Exception as e:
+            # 如果 trainee 相关环境变量缺失，创建一个最小化的实例
+            logger.warning(f"Trainee 客户端初始化失败，可能是环境变量缺失: {e}")
+            self._init_minimal()
         
         # 如果提供了外部图谱路径，则加载它
         if self.external_graph_path:
             self._load_external_graph()
+    
+    def _init_minimal(self):
+        """最小化初始化，不依赖 trainee 客户端"""
+        from graphgen.models import JsonKVStorage, JsonListStorage, NetworkXStorage, OpenAIClient, Tokenizer
+        
+        self.tokenizer_instance: Tokenizer = self.tokenizer_instance or Tokenizer(
+            model_name=os.getenv("TOKENIZER_MODEL", "cl100k_base")
+        )
+
+        self.synthesizer_llm_client: OpenAIClient = (
+            self.synthesizer_llm_client
+            or OpenAIClient(
+                model_name=os.getenv("SYNTHESIZER_MODEL"),
+                api_key=os.getenv("SYNTHESIZER_API_KEY"),
+                base_url=os.getenv("SYNTHESIZER_BASE_URL"),
+                tokenizer=self.tokenizer_instance,
+            )
+        )
+
+        # trainee_llm_client 设为 None，在需要时检查
+        self.trainee_llm_client = None
+
+        self.full_docs_storage: JsonKVStorage = JsonKVStorage(
+            self.working_dir, namespace="full_docs"
+        )
+        self.text_chunks_storage: JsonKVStorage = JsonKVStorage(
+            self.working_dir, namespace="text_chunks"
+        )
+        self.graph_storage: NetworkXStorage = NetworkXStorage(
+            self.working_dir, namespace="graph"
+        )
+        self.search_storage: JsonKVStorage = JsonKVStorage(
+            self.working_dir, namespace="search"
+        )
+        self.rephrase_storage: JsonKVStorage = JsonKVStorage(
+            self.working_dir, namespace="rephrase"
+        )
+        self.qa_storage: JsonListStorage = JsonListStorage(
+            os.path.join(self.working_dir, "data", "graphgen", f"{self.unique_id}"),
+            namespace="qa",
+        )
     
     def _load_external_graph(self):
         """加载外部知识图谱"""
@@ -93,6 +139,16 @@ class CustomGraphGen(GraphGen):
         """
         logger.info("📝 在外部知识图谱基础上插入额外数据...")
         return await super().insert(read_config, split_config)
+    
+    async def quiz_and_judge(self, quiz_and_judge_config: Dict):
+        """
+        重写问答测试方法，检查 trainee 客户端是否可用
+        """
+        if self.trainee_llm_client is None:
+            logger.warning("⚠️  Trainee 客户端未初始化，跳过问答测试和判断步骤")
+            return
+        
+        return await super().quiz_and_judge(quiz_and_judge_config)
     
     def get_graph_summary(self) -> Dict:
         """获取图谱摘要信息"""
