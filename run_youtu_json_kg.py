@@ -272,13 +272,27 @@ async def run_full_graphgen(
     log_file = os.path.join(working_dir, f"youtu_json_kg_{unique_id}_{generation_mode}.log")
     set_logger(log_file, if_stream=True)
     
-    # 创建自定义 GraphGen 实例
+    # 创建自定义 GraphGen 实例（无trainee模式）
     graph_gen = CustomGraphGen(
         external_graph_path=external_graph_path,
         working_dir=working_dir,
         unique_id=unique_id,
-        skip_kg_building=True
+        skip_kg_building=True,
+        no_trainee_mode=True  # 启用无trainee模式
     )
+    
+    # 显示当前配置状态
+    print("\n🔧 当前配置状态:")
+    print(f"   📋 无trainee模式: ✅ 启用")
+    print(f"   🏗️  跳过KG构建: {'✅ 启用' if graph_gen.skip_kg_building else '❌ 禁用'}")
+    print(f"   🤖 Synthesizer客户端: {'✅ 可用' if graph_gen.synthesizer_llm_client else '❌ 不可用'}")
+    print(f"   🎓 Trainee客户端: {'✅ 可用' if graph_gen.trainee_llm_client else '❌ 不可用'}")
+    print(f"   📊 外部图谱: {'✅ 已加载' if graph_gen.external_graph_path else '❌ 未加载'}")
+    
+    if not graph_gen.synthesizer_llm_client:
+        print("\n⚠️  注意：synthesizer客户端未初始化")
+        print("   💡 如需完整功能，请设置: export SYNTHESIZER_API_KEY='your_openai_api_key'")
+        print("   🔄 将自动使用简化版生成方案")
     
     try:
         # 步骤1: 初始化外部知识图谱
@@ -304,25 +318,32 @@ async def run_full_graphgen(
         # 步骤2: 可选的搜索增强
         if config["search"]["enabled"]:
             print("🔍 步骤2: 搜索增强...")
-            await graph_gen.search(search_config=config["search"])
+            graph_gen.search(search_config=config["search"])
         else:
             print("⏭️  步骤2: 跳过搜索增强")
         
         # 步骤3: 问答测试和判断
         if config["quiz_and_judge"]["enabled"]:
             print("🧠 步骤3: 问答测试和判断...")
-            await graph_gen.quiz_and_judge(quiz_and_judge_config=config["quiz_and_judge"])
+            graph_gen.quiz_and_judge(quiz_and_judge_config=config["quiz_and_judge"])
         else:
             print("⏭️  步骤3: 跳过问答测试和判断（已禁用）")
         
         # 步骤4: 生成数据
         print(f"⚡ 步骤4: 生成 {generation_mode} 数据...")
         try:
-            # 直接使用异步调用，因为我们已经在异步函数中
-            await graph_gen.generate(
+            # 使用同步调用，因为被@async_to_sync_method装饰的方法实际上是同步的
+            graph_gen.generate(
                 partition_config=config["partition"],
                 generate_config=config["generate"]
             )
+        except ValueError as e:
+            if "synthesizer_llm_client 未初始化" in str(e):
+                logger.error(f"❌ 无trainee模式需要synthesizer客户端: {e}")
+                logger.warning("🔄 切换到简化版生成作为备用方案")
+                return await run_simplified_generation(json_file, working_dir, generation_mode, data_format)
+            else:
+                raise
         except RuntimeError as e:
             if "event loop is already running" in str(e):
                 logger.error(f"❌ 事件循环冲突: {e}")
