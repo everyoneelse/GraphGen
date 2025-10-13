@@ -1,0 +1,112 @@
+[
+  {
+    "start_node": {
+      "label": "entity",
+      "properties": {
+        "name": "FC Barcelona",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "organization"
+      }
+    },
+    "relation": "has_attribute",
+    "end_node": {
+      "label": "attribute",
+      "properties": {
+        "name": "type: football club",
+        "chunk id": "0FCIUkTr"
+      }
+    }
+  },
+  {
+    "start_node": {
+      "label": "entity",
+      "properties": {
+        "name": "FC Barcelona",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "organization"
+      }
+    },
+    "relation": "has_attribute",
+    "end_node": {
+      "label": "attribute",
+      "properties": {
+        "name": "status: active",
+        "chunk id": "0FCIUkTr"
+      }
+    }
+  },
+  {
+    "start_node": {
+      "label": "entity",
+      "properties": {
+        "name": "Lionel Messi",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "person"
+      }
+    },
+    "relation": "has_attribute",
+    "end_node": {
+      "label": "attribute",
+      "properties": {
+        "name": "position: forward",
+        "chunk id": "0FCIUkTr"
+      }
+    }
+  },
+  {
+    "start_node": {
+      "label": "entity",
+      "properties": {
+        "name": "Lionel Messi",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "person"
+      }
+    },
+    "relation": "played_for",
+    "end_node": {
+      "label": "entity",
+      "properties": {
+        "name": "FC Barcelona",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "organization"
+      }
+    }
+  },
+  {
+    "start_node": {
+      "label": "entity",
+      "properties": {
+        "name": "Camp Nou",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "location"
+      }
+    },
+    "relation": "has_attribute",
+    "end_node": {
+      "label": "attribute",
+      "properties": {
+        "name": "capacity: 99,354",
+        "chunk id": "0FCIUkTr"
+      }
+    }
+  },
+  {
+    "start_node": {
+      "label": "entity",
+      "properties": {
+        "name": "FC Barcelona",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "organization"
+      }
+    },
+    "relation": "home_stadium",
+    "end_node": {
+      "label": "entity",
+      "properties": {
+        "name": "Camp Nou",
+        "chunk id": "0FCIUkTr",
+        "schema_type": "location"
+      }
+    }
+  }
+]
