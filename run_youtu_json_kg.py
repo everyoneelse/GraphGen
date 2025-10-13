@@ -260,7 +260,12 @@ async def run_full_graphgen(
     # 如果禁用 quiz 或 quiz_samples 为 0，则禁用问答测试
     if disable_quiz or quiz_samples == 0:
         config["quiz_and_judge"]["enabled"] = False
+        # 同时将edge_sampling改为random，因为没有loss属性
+        if (config["partition"]["method"] == "ece" 
+            and "method_params" in config["partition"]):
+            config["partition"]["method_params"]["edge_sampling"] = "random"
         print("⏭️  问答测试和判断已禁用")
+        print("⏭️  边采样策略已设为 random（因为没有loss属性）")
     
     # 如果启用搜索，更新配置
     if enable_search:
