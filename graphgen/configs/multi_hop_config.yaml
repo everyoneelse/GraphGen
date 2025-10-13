@@ -14,7 +14,7 @@ partition: # graph partition configuration
   method: ece # ece is a custom partition method based on comprehension loss
   method_params:
     bidirectional: true # whether to traverse the graph in both directions
-    edge_sampling: max_loss # edge sampling strategy, support: random, max_loss, min_loss
+    edge_sampling: random # edge sampling strategy, support: random, max_loss, min_loss
     expand_method: max_width # expand method, support: max_width, max_depth
     isolated_node_strategy: ignore # strategy for isolated nodes, support: ignore, add
     max_depth: 1 # maximum depth for graph traversal
