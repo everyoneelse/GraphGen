@@ -51,8 +51,8 @@ class OpenAIClient(BaseLLMClient):
 
         self.token_usage: list = []
         self.request_limit = request_limit
-        self.rpm = RPM(rpm=1000)
-        self.tpm = TPM(tpm=50000)
+        self.rpm = RPM(rpm=300)
+        self.tpm = TPM(tpm=20000)
 
         self.__post_init__()
 
@@ -86,8 +86,8 @@ class OpenAIClient(BaseLLMClient):
         return kwargs
 
     @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(8),
+        wait=wait_exponential(multiplier=2, min=8, max=30),
         retry=retry_if_exception_type(
             (RateLimitError, APIConnectionError, APITimeoutError)
         ),
@@ -115,8 +115,8 @@ class OpenAIClient(BaseLLMClient):
         return tokens
 
     @retry(
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(8),
+        wait=wait_exponential(multiplier=2, min=8, max=30),
         retry=retry_if_exception_type(
             (RateLimitError, APIConnectionError, APITimeoutError)
         ),
