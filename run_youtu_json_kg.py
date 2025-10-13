@@ -272,12 +272,13 @@ async def run_full_graphgen(
     log_file = os.path.join(working_dir, f"youtu_json_kg_{unique_id}_{generation_mode}.log")
     set_logger(log_file, if_stream=True)
     
-    # 创建自定义 GraphGen 实例
+    # 创建自定义 GraphGen 实例（无trainee模式）
     graph_gen = CustomGraphGen(
         external_graph_path=external_graph_path,
         working_dir=working_dir,
         unique_id=unique_id,
-        skip_kg_building=True
+        skip_kg_building=True,
+        no_trainee_mode=True  # 启用无trainee模式
     )
     
     try:

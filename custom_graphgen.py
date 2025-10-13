@@ -16,20 +16,26 @@ from graphgen.utils import logger
 
 @dataclass
 class CustomGraphGen(GraphGen):
-    """支持外部知识图谱的 GraphGen"""
+    """支持外部知识图谱的 GraphGen，无trainee模式"""
     
     external_graph_path: str = None
     skip_kg_building: bool = True  # 跳过知识图谱构建步骤
+    no_trainee_mode: bool = True   # 无trainee模式，不使用trainee客户端
     
     def __post_init__(self):
         """初始化，加载外部知识图谱"""
-        # 先调用父类初始化，但允许 trainee 客户端为空
-        try:
-            super().__post_init__()
-        except Exception as e:
-            # 如果 trainee 相关环境变量缺失，创建一个最小化的实例
-            logger.warning(f"Trainee 客户端初始化失败，可能是环境变量缺失: {e}")
+        if self.no_trainee_mode:
+            # 无trainee模式，直接使用最小化初始化
+            logger.info("🚀 启用无trainee模式，使用最小化初始化")
             self._init_minimal()
+        else:
+            # 标准模式，先尝试调用父类初始化
+            try:
+                super().__post_init__()
+            except Exception as e:
+                # 如果 trainee 相关环境变量缺失，创建一个最小化的实例
+                logger.warning(f"Trainee 客户端初始化失败，可能是环境变量缺失: {e}")
+                self._init_minimal()
         
         # 如果提供了外部图谱路径，则加载它
         if self.external_graph_path:
@@ -55,12 +61,15 @@ class CustomGraphGen(GraphGen):
                     tokenizer=self.tokenizer_instance,
                 )
             )
+            logger.info("✅ Synthesizer LLM 客户端初始化成功")
         else:
-            logger.warning("未提供 SYNTHESIZER_API_KEY，synthesizer_llm_client 将设为 None")
+            logger.warning("⚠️  未提供 SYNTHESIZER_API_KEY，synthesizer_llm_client 将设为 None")
+            logger.info("💡 如需完整功能，请设置环境变量: export SYNTHESIZER_API_KEY='your_api_key'")
             self.synthesizer_llm_client = None
 
-        # trainee_llm_client 设为 None，在需要时检查
+        # 无trainee模式：trainee_llm_client 始终设为 None
         self.trainee_llm_client = None
+        logger.info("🚫 无trainee模式：trainee_llm_client 设为 None")
 
         self.full_docs_storage: JsonKVStorage = JsonKVStorage(
             self.working_dir, namespace="full_docs"
@@ -148,10 +157,13 @@ class CustomGraphGen(GraphGen):
     
     async def quiz_and_judge(self, quiz_and_judge_config: Dict):
         """
-        重写问答测试方法，检查 trainee 客户端是否可用
+        重写问答测试方法，无trainee模式下跳过此步骤
         """
-        if self.trainee_llm_client is None:
-            logger.warning("⚠️  Trainee 客户端未初始化，跳过问答测试和判断步骤")
+        if self.no_trainee_mode or self.trainee_llm_client is None:
+            if self.no_trainee_mode:
+                logger.info("🚫 无trainee模式：跳过问答测试和判断步骤")
+            else:
+                logger.warning("⚠️  Trainee 客户端未初始化，跳过问答测试和判断步骤")
             return
         
         return await super().quiz_and_judge(quiz_and_judge_config)
