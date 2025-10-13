@@ -86,7 +86,8 @@ async def run_graphgen_with_external_kg(
         data_format=data_format,
         quiz_samples=quiz_samples,
         max_depth=max_depth,
-        max_extra_edges=max_extra_edges
+        max_extra_edges=max_extra_edges,
+        no_trainee_mode=False  # 这个脚本使用完整的trainee模式
     )
     
     # 如果启用搜索，更新配置
