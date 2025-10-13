@@ -38,12 +38,15 @@ cp .env.example .env
 
 编辑 `.env` 文件，填入您的API配置：
 ```bash
+# Tokenizer - 必须配置！用于文本分块和长度计算
+TOKENIZER_MODEL=cl100k_base                      # 推荐使用（适用于GPT-4/3.5）
+
 # Synthesizer - 用于构建知识图谱和生成QA对
 SYNTHESIZER_MODEL=gpt-4o-mini                    # 或其他模型
 SYNTHESIZER_BASE_URL=https://api.openai.com/v1  # API地址
 SYNTHESIZER_API_KEY=sk-xxxxx                     # 您的API密钥
 
-# Trainee - 用于评估知识掌握情况
+# Trainee - 用于评估知识掌握情况（可选）
 TRAINEE_MODEL=gpt-4o-mini                        # 可以与Synthesizer相同或不同
 TRAINEE_BASE_URL=https://api.openai.com/v1
 TRAINEE_API_KEY=sk-xxxxx
