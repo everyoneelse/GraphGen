@@ -9,7 +9,21 @@ import time
 import argparse
 import json
 from pathlib import Path
-from dotenv import load_dotenv
+
+# 首先尝试应用 nest_asyncio 来解决事件循环问题
+try:
+    import nest_asyncio
+    nest_asyncio.apply()
+    print("✅ nest_asyncio 已应用，解决事件循环嵌套问题")
+except ImportError:
+    print("⚠️  nest_asyncio 未安装，将使用备用方案")
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    print("⚠️  python-dotenv 未安装，跳过 .env 文件加载")
+    def load_dotenv():
+        pass
 
 # 添加当前目录到 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,11 +31,31 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from youtu_json_converter import YoutuJSONConverter
 except ImportError as e:
-    print(f"❌ 导入错误: {e}")
-    print("请确保 youtu_json_converter.py 文件在当前目录下")
-    sys.exit(1)
-from custom_graphgen import CustomGraphGen, create_custom_config
-from graphgen.utils import logger, set_logger
+    print(f"⚠️  youtu_json_converter 导入失败: {e}")
+    print("使用简化版转换器...")
+    try:
+        from simple_youtu_converter import SimpleYoutuConverter as YoutuJSONConverter
+    except ImportError:
+        print("❌ 简化版转换器也不可用，请检查文件")
+        sys.exit(1)
+
+try:
+    from custom_graphgen import CustomGraphGen, create_custom_config
+    from graphgen.utils import logger, set_logger
+    GRAPHGEN_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  GraphGen 导入失败: {e}")
+    print("将使用简化版生成方案...")
+    GRAPHGEN_AVAILABLE = False
+    
+    # 创建简单的日志函数
+    class SimpleLogger:
+        def info(self, msg): print(f"INFO: {msg}")
+        def warning(self, msg): print(f"WARNING: {msg}")
+        def error(self, msg): print(f"ERROR: {msg}")
+    
+    logger = SimpleLogger()
+    def set_logger(file, if_stream=True): pass
 
 
 def setup_environment(disable_quiz: bool = False):
@@ -67,11 +101,18 @@ def convert_youtu_json_kg(json_file: str, output_file: str, stats_file: str = No
         converter = YoutuJSONConverter()
         data = converter.load_youtu_json_data(json_file)
         converter.parse_youtu_data(data)
-        converter.convert_to_graphgen_format()
-        converter.validate_graph()
-        converter.save_to_graphml(output_file)
         
-        if stats_file:
+        # 检查是否有 GraphML 保存方法
+        if hasattr(converter, 'save_to_graphml'):
+            converter.convert_to_graphgen_format()
+            if hasattr(converter, 'validate_graph'):
+                converter.validate_graph()
+            converter.save_to_graphml(output_file)
+        else:
+            # 使用简化版的 JSON 保存
+            converter.save_to_json(output_file.replace('.graphml', '.json'))
+        
+        if stats_file and hasattr(converter, 'export_statistics'):
             converter.export_statistics(stats_file)
         
         return True
@@ -83,6 +124,92 @@ def convert_youtu_json_kg(json_file: str, output_file: str, stats_file: str = No
 
 
 async def run_graphgen_with_youtu_json(
+    json_file: str = None,
+    external_graph_path: str = None,
+    working_dir: str = "cache",
+    generation_mode: str = "atomic",
+    data_format: str = "Alpaca",
+    quiz_samples: int = 5,
+    disable_quiz: bool = False,
+    max_depth: int = 3,
+    max_extra_edges: int = 5,
+    enable_search: bool = False,
+    skip_convert: bool = False
+):
+    """使用 youtu-graphrag JSON 知识图谱运行 GraphGen"""
+    
+    # 如果 GraphGen 不可用，使用简化版方案
+    if not GRAPHGEN_AVAILABLE:
+        return await run_simplified_generation(
+            json_file, working_dir, generation_mode, data_format
+        )
+    
+    return await run_full_graphgen(
+        json_file, external_graph_path, working_dir, generation_mode, 
+        data_format, quiz_samples, disable_quiz, max_depth, 
+        max_extra_edges, enable_search, skip_convert
+    )
+
+
+async def run_simplified_generation(
+    json_file: str,
+    working_dir: str = "cache",
+    generation_mode: str = "atomic", 
+    data_format: str = "Alpaca"
+):
+    """简化版生成方案"""
+    print("🚀 使用简化版生成方案...")
+    
+    try:
+        # 1. 转换数据
+        print("📝 步骤1: 转换知识图谱数据...")
+        converter = YoutuJSONConverter()
+        data = converter.load_youtu_json_data(json_file)
+        converter.parse_youtu_data(data)
+        
+        converted_file = os.path.join(working_dir, "converted_data.json")
+        result = converter.save_to_json(converted_file)
+        
+        # 2. 生成问答对
+        print("⚡ 步骤2: 生成问答数据...")
+        from create_qa_from_converted import create_qa_from_converted_data
+        
+        qa_pairs = create_qa_from_converted_data(converted_file, data_format)
+        
+        # 3. 保存结果
+        unique_id = int(time.time())
+        output_dir = os.path.join(working_dir, "data", "graphgen", str(unique_id))
+        os.makedirs(output_dir, exist_ok=True)
+        
+        output_file = os.path.join(output_dir, "qa.json")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(qa_pairs, f, ensure_ascii=False, indent=2)
+        
+        print(f"\n✅ 简化版数据生成完成！")
+        print(f"📁 输出目录: {output_dir}")
+        print(f"📄 生成文件: qa.json")
+        print(f"📊 问答对数量: {len(qa_pairs)}")
+        
+        # 显示示例
+        print(f"\n📝 示例问答对:")
+        for i, qa in enumerate(qa_pairs[:3]):
+            print(f"{i+1}. Q: {qa.get('instruction', qa.get('conversations', [{}])[0].get('value', 'N/A'))}")
+            if 'output' in qa:
+                print(f"   A: {qa['output']}")
+            elif 'conversations' in qa and len(qa['conversations']) > 1:
+                print(f"   A: {qa['conversations'][1].get('value', 'N/A')}")
+            print()
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ 简化版生成失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+async def run_full_graphgen(
     json_file: str = None,
     external_graph_path: str = None,
     working_dir: str = "cache",
@@ -198,11 +325,22 @@ async def run_graphgen_with_youtu_json(
         except RuntimeError as e:
             if "event loop is already running" in str(e):
                 logger.warning("事件循环冲突，使用同步方法")
-                # 使用同步版本
-                graph_gen.generate_sync(
-                    partition_config=config["partition"],
-                    generate_config=config["generate"]
-                )
+                try:
+                    # 使用同步版本
+                    if hasattr(graph_gen, 'generate_sync'):
+                        graph_gen.generate_sync(
+                            partition_config=config["partition"],
+                            generate_config=config["generate"]
+                        )
+                    else:
+                        # 直接调用父类的同步方法
+                        from graphgen.graphgen import GraphGen
+                        GraphGen.generate(graph_gen, config["partition"], config["generate"])
+                except Exception as sync_e:
+                    logger.error(f"同步方法也失败: {sync_e}")
+                    # 最后的备用方案：使用简化版生成
+                    logger.warning("使用简化版生成作为备用方案")
+                    return await run_simplified_generation(json_file, working_dir, generation_mode, data_format)
             else:
                 raise
         
@@ -302,21 +440,74 @@ def main():
     
     # 运行 GraphGen
     import asyncio
-    success = asyncio.run(run_graphgen_with_youtu_json(
-        json_file=args.json,
-        external_graph_path=args.external_graph or converted_graph_path,
-        working_dir=args.working_dir,
-        generation_mode=args.mode,
-        data_format=args.format,
-        quiz_samples=args.quiz_samples,
-        disable_quiz=args.disable_quiz,
-        max_depth=args.max_depth,
-        max_extra_edges=args.max_extra_edges,
-        enable_search=args.enable_search,
-        skip_convert=args.skip_convert
-    ))
+    
+    try:
+        success = asyncio.run(run_graphgen_with_youtu_json(
+            json_file=args.json,
+            external_graph_path=args.external_graph or converted_graph_path,
+            working_dir=args.working_dir,
+            generation_mode=args.mode,
+            data_format=args.format,
+            quiz_samples=args.quiz_samples,
+            disable_quiz=args.disable_quiz,
+            max_depth=args.max_depth,
+            max_extra_edges=args.max_extra_edges,
+            enable_search=args.enable_search,
+            skip_convert=args.skip_convert
+        ))
+    except RuntimeError as e:
+        if "event loop is already running" in str(e):
+            print("⚠️  检测到事件循环冲突，使用同步备用方案...")
+            # 直接使用简化版同步方案
+            success = run_sync_fallback(
+                json_file=args.json,
+                working_dir=args.working_dir,
+                generation_mode=args.mode,
+                data_format=args.format
+            )
+        else:
+            raise
     
     return 0 if success else 1
+
+
+def run_sync_fallback(json_file: str, working_dir: str, generation_mode: str, data_format: str):
+    """同步备用方案"""
+    print("🔄 使用同步备用方案...")
+    
+    try:
+        # 使用简化版转换器
+        from simple_youtu_converter import SimpleYoutuConverter
+        from create_qa_from_converted import create_qa_from_converted_data
+        
+        # 1. 转换数据
+        converter = SimpleYoutuConverter()
+        data = converter.load_youtu_json_data(json_file)
+        converter.parse_youtu_data(data)
+        
+        converted_file = os.path.join(working_dir, "converted_data.json")
+        converter.save_to_json(converted_file)
+        
+        # 2. 生成问答对
+        qa_pairs = create_qa_from_converted_data(converted_file, data_format)
+        
+        # 3. 保存结果
+        unique_id = int(time.time())
+        output_dir = os.path.join(working_dir, "data", "graphgen", str(unique_id))
+        os.makedirs(output_dir, exist_ok=True)
+        
+        output_file = os.path.join(output_dir, "qa.json")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(qa_pairs, f, ensure_ascii=False, indent=2)
+        
+        print(f"✅ 同步备用方案成功！生成了 {len(qa_pairs)} 个问答对")
+        print(f"📁 输出文件: {output_file}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ 同步备用方案也失败: {e}")
+        return False
 
 
 if __name__ == "__main__":
