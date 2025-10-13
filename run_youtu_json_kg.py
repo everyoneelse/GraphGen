@@ -16,7 +16,8 @@ try:
     nest_asyncio.apply()
     print("✅ nest_asyncio 已应用，解决事件循环嵌套问题")
 except ImportError:
-    print("⚠️  nest_asyncio 未安装，将使用备用方案")
+    print("⚠️  nest_asyncio 未安装，请运行: pip install nest_asyncio")
+    print("将使用备用方案，但可能会遇到事件循环问题")
 
 try:
     from dotenv import load_dotenv
@@ -317,30 +318,17 @@ async def run_full_graphgen(
         # 步骤4: 生成数据
         print(f"⚡ 步骤4: 生成 {generation_mode} 数据...")
         try:
-            # 尝试异步调用
+            # 直接使用异步调用，因为我们已经在异步函数中
             await graph_gen.generate(
                 partition_config=config["partition"],
                 generate_config=config["generate"]
             )
         except RuntimeError as e:
             if "event loop is already running" in str(e):
-                logger.warning("事件循环冲突，使用同步方法")
-                try:
-                    # 使用同步版本
-                    if hasattr(graph_gen, 'generate_sync'):
-                        graph_gen.generate_sync(
-                            partition_config=config["partition"],
-                            generate_config=config["generate"]
-                        )
-                    else:
-                        # 直接调用父类的同步方法
-                        from graphgen.graphgen import GraphGen
-                        GraphGen.generate(graph_gen, config["partition"], config["generate"])
-                except Exception as sync_e:
-                    logger.error(f"同步方法也失败: {sync_e}")
-                    # 最后的备用方案：使用简化版生成
-                    logger.warning("使用简化版生成作为备用方案")
-                    return await run_simplified_generation(json_file, working_dir, generation_mode, data_format)
+                logger.error(f"❌ 事件循环冲突: {e}")
+                # 最后的备用方案：使用简化版生成
+                logger.warning("使用简化版生成作为备用方案")
+                return await run_simplified_generation(json_file, working_dir, generation_mode, data_format)
             else:
                 raise
         
