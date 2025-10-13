@@ -80,6 +80,7 @@ async def run_graphgen_with_youtu_json(
     generation_mode: str = "atomic",
     data_format: str = "Alpaca",
     quiz_samples: int = 5,
+    disable_quiz: bool = False,
     max_depth: int = 3,
     max_extra_edges: int = 5,
     enable_search: bool = False,
@@ -114,10 +115,15 @@ async def run_graphgen_with_youtu_json(
         external_graph_path=external_graph_path,
         generation_mode=generation_mode,
         data_format=data_format,
-        quiz_samples=quiz_samples,
+        quiz_samples=quiz_samples if not disable_quiz else 0,
         max_depth=max_depth,
         max_extra_edges=max_extra_edges
     )
+    
+    # 如果禁用 quiz 或 quiz_samples 为 0，则禁用问答测试
+    if disable_quiz or quiz_samples == 0:
+        config["quiz_and_judge"]["enabled"] = False
+        print("⏭️  问答测试和判断已禁用")
     
     # 如果启用搜索，更新配置
     if enable_search:
@@ -170,7 +176,7 @@ async def run_graphgen_with_youtu_json(
             print("🧠 步骤3: 问答测试和判断...")
             await graph_gen.quiz_and_judge(quiz_and_judge_config=config["quiz_and_judge"])
         else:
-            print("⏭️  步骤3: 跳过问答测试")
+            print("⏭️  步骤3: 跳过问答测试和判断（已禁用）")
         
         # 步骤4: 生成数据
         print(f"⚡ 步骤4: 生成 {generation_mode} 数据...")
@@ -244,7 +250,8 @@ def main():
                        default='atomic', help='生成模式 (默认: atomic)')
     parser.add_argument('--format', choices=['Alpaca', 'Sharegpt', 'ChatML'], 
                        default='Alpaca', help='数据格式 (默认: Alpaca)')
-    parser.add_argument('--quiz-samples', type=int, default=5, help='测试样本数量 (默认: 5)')
+    parser.add_argument('--quiz-samples', type=int, default=5, help='测试样本数量 (默认: 5, 设为 0 禁用)')
+    parser.add_argument('--disable-quiz', action='store_true', help='禁用问答测试和判断步骤')
     parser.add_argument('--max-depth', type=int, default=3, help='最大遍历深度 (默认: 3)')
     parser.add_argument('--max-extra-edges', type=int, default=5, help='最大额外边数 (默认: 5)')
     parser.add_argument('--enable-search', action='store_true', help='启用搜索增强')
@@ -281,6 +288,7 @@ def main():
         generation_mode=args.mode,
         data_format=args.format,
         quiz_samples=args.quiz_samples,
+        disable_quiz=args.disable_quiz,
         max_depth=args.max_depth,
         max_extra_edges=args.max_extra_edges,
         enable_search=args.enable_search,
