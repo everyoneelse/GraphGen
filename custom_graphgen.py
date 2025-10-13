@@ -159,16 +159,27 @@ class CustomGraphGen(GraphGen):
         # 检查是否已经在事件循环中
         try:
             loop = asyncio.get_running_loop()
-            # 如果已经在事件循环中，使用 nest_asyncio 或直接调用原始方法
-            logger.warning("检测到正在运行的事件循环，使用同步调用")
+            # 如果已经在事件循环中，创建一个任务并等待
+            logger.warning("检测到正在运行的事件循环，创建异步任务")
             
-            # 直接调用父类的同步包装方法
-            from graphgen.graphgen import GraphGen
-            return GraphGen.generate(self, partition_config, generate_config)
+            # 创建异步任务
+            task = loop.create_task(super().generate(partition_config, generate_config))
             
-        except RuntimeError:
-            # 没有运行中的事件循环，可以安全地创建新的
-            return asyncio.run(super().generate(partition_config, generate_config))
+            # 使用 nest_asyncio 来运行任务
+            try:
+                import nest_asyncio
+                nest_asyncio.apply()
+                return loop.run_until_complete(task)
+            except ImportError:
+                # 如果没有 nest_asyncio，抛出错误让上层处理
+                raise RuntimeError("需要安装 nest_asyncio 来处理嵌套事件循环")
+            
+        except RuntimeError as e:
+            if "no running event loop" in str(e):
+                # 没有运行中的事件循环，可以安全地创建新的
+                return asyncio.run(super().generate(partition_config, generate_config))
+            else:
+                raise
     
     def get_graph_summary(self) -> Dict:
         """获取图谱摘要信息"""

@@ -1,0 +1,24 @@
+{
+  "entities": [
+    {
+      "id": "entity1",
+      "name": "Test Entity 1",
+      "type": "PERSON",
+      "description": "A test person entity"
+    },
+    {
+      "id": "entity2", 
+      "name": "Test Entity 2",
+      "type": "ORGANIZATION",
+      "description": "A test organization entity"
+    }
+  ],
+  "relationships": [
+    {
+      "source": "entity1",
+      "target": "entity2",
+      "relation": "WORKS_FOR",
+      "description": "Entity 1 works for Entity 2"
+    }
+  ]
+}
