@@ -14,7 +14,12 @@ from dotenv import load_dotenv
 # 添加当前目录到 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from youtu_json_converter import YoutuJSONConverter
+try:
+    from youtu_json_converter import YoutuJSONConverter
+except ImportError as e:
+    print(f"❌ 导入错误: {e}")
+    print("请确保 youtu_json_converter.py 文件在当前目录下")
+    sys.exit(1)
 from custom_graphgen import CustomGraphGen, create_custom_config
 from graphgen.utils import logger, set_logger
 
