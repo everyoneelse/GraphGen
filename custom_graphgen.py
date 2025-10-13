@@ -150,6 +150,26 @@ class CustomGraphGen(GraphGen):
         
         return await super().quiz_and_judge(quiz_and_judge_config)
     
+    def generate_sync(self, partition_config: Dict, generate_config: Dict):
+        """
+        同步版本的生成方法，避免事件循环冲突
+        """
+        import asyncio
+        
+        # 检查是否已经在事件循环中
+        try:
+            loop = asyncio.get_running_loop()
+            # 如果已经在事件循环中，使用 nest_asyncio 或直接调用原始方法
+            logger.warning("检测到正在运行的事件循环，使用同步调用")
+            
+            # 直接调用父类的同步包装方法
+            from graphgen.graphgen import GraphGen
+            return GraphGen.generate(self, partition_config, generate_config)
+            
+        except RuntimeError:
+            # 没有运行中的事件循环，可以安全地创建新的
+            return asyncio.run(super().generate(partition_config, generate_config))
+    
     def get_graph_summary(self) -> Dict:
         """获取图谱摘要信息"""
         graph = self.graph_storage._graph

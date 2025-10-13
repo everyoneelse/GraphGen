@@ -189,10 +189,22 @@ async def run_graphgen_with_youtu_json(
         
         # 步骤4: 生成数据
         print(f"⚡ 步骤4: 生成 {generation_mode} 数据...")
-        await graph_gen.generate(
-            partition_config=config["partition"],
-            generate_config=config["generate"]
-        )
+        try:
+            # 尝试异步调用
+            await graph_gen.generate(
+                partition_config=config["partition"],
+                generate_config=config["generate"]
+            )
+        except RuntimeError as e:
+            if "event loop is already running" in str(e):
+                logger.warning("事件循环冲突，使用同步方法")
+                # 使用同步版本
+                graph_gen.generate_sync(
+                    partition_config=config["partition"],
+                    generate_config=config["generate"]
+                )
+            else:
+                raise
         
         # 步骤5: 导出统计信息
         final_stats_file = os.path.join(working_dir, f"final_graph_statistics_{unique_id}.json")
