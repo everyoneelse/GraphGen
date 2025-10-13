@@ -43,15 +43,21 @@ class CustomGraphGen(GraphGen):
             model_name=os.getenv("TOKENIZER_MODEL", "cl100k_base")
         )
 
-        self.synthesizer_llm_client: OpenAIClient = (
-            self.synthesizer_llm_client
-            or OpenAIClient(
-                model_name=os.getenv("SYNTHESIZER_MODEL"),
-                api_key=os.getenv("SYNTHESIZER_API_KEY"),
-                base_url=os.getenv("SYNTHESIZER_BASE_URL"),
-                tokenizer=self.tokenizer_instance,
+        # 只有在提供了 API key 时才创建 OpenAI 客户端
+        synthesizer_api_key = os.getenv("SYNTHESIZER_API_KEY")
+        if synthesizer_api_key:
+            self.synthesizer_llm_client: OpenAIClient = (
+                self.synthesizer_llm_client
+                or OpenAIClient(
+                    model_name=os.getenv("SYNTHESIZER_MODEL", "gpt-3.5-turbo"),
+                    api_key=synthesizer_api_key,
+                    base_url=os.getenv("SYNTHESIZER_BASE_URL"),
+                    tokenizer=self.tokenizer_instance,
+                )
             )
-        )
+        else:
+            logger.warning("未提供 SYNTHESIZER_API_KEY，synthesizer_llm_client 将设为 None")
+            self.synthesizer_llm_client = None
 
         # trainee_llm_client 设为 None，在需要时检查
         self.trainee_llm_client = None

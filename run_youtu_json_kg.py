@@ -283,7 +283,7 @@ async def run_full_graphgen(
     try:
         # 步骤1: 初始化外部知识图谱
         print("📝 步骤1: 初始化外部知识图谱...")
-        graph_gen.insert(
+        await graph_gen.insert(
             read_config=config["read"], 
             split_config=config["split"]
         )
@@ -304,22 +304,22 @@ async def run_full_graphgen(
         # 步骤2: 可选的搜索增强
         if config["search"]["enabled"]:
             print("🔍 步骤2: 搜索增强...")
-            graph_gen.search(search_config=config["search"])
+            await graph_gen.search(search_config=config["search"])
         else:
             print("⏭️  步骤2: 跳过搜索增强")
         
         # 步骤3: 问答测试和判断
         if config["quiz_and_judge"]["enabled"]:
             print("🧠 步骤3: 问答测试和判断...")
-            graph_gen.quiz_and_judge(quiz_and_judge_config=config["quiz_and_judge"])
+            await graph_gen.quiz_and_judge(quiz_and_judge_config=config["quiz_and_judge"])
         else:
             print("⏭️  步骤3: 跳过问答测试和判断（已禁用）")
         
         # 步骤4: 生成数据
         print(f"⚡ 步骤4: 生成 {generation_mode} 数据...")
         try:
-            # 使用同步调用，因为 generate 方法被 @async_to_sync_method 装饰器转换为同步方法
-            graph_gen.generate(
+            # 使用异步调用，因为我们已经在异步函数中
+            await graph_gen.generate(
                 partition_config=config["partition"],
                 generate_config=config["generate"]
             )
