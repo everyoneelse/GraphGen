@@ -207,6 +207,15 @@ class CustomGraphGen(GraphGen):
             logger.info("💡 或者使用简化版生成方案")
             raise ValueError("synthesizer_llm_client 未初始化，无法进行数据生成")
         
+        # 在无trainee模式下，如果使用了基于loss的edge_sampling，需要改为random
+        if (self.no_trainee_mode or self.trainee_llm_client is None):
+            if (partition_config.get("method") == "ece" 
+                and "method_params" in partition_config
+                and partition_config["method_params"].get("edge_sampling") in ["max_loss", "min_loss"]):
+                logger.warning("无trainee模式下，edge_sampling从 '%s' 改为 'random'，因为没有loss属性", 
+                             partition_config["method_params"]["edge_sampling"])
+                partition_config["method_params"]["edge_sampling"] = "random"
+        
         logger.info("🚀 开始生成数据（无trainee模式）...")
         return super().generate(partition_config, generate_config)
     
@@ -383,6 +392,12 @@ if __name__ == "__main__":
             # 问答测试和判断
             if config["quiz_and_judge"]["enabled"]:
                 await graph_gen.quiz_and_judge(quiz_and_judge_config=config["quiz_and_judge"])
+            else:
+                # 如果禁用了问答测试，需要将edge_sampling设为random，因为没有loss属性
+                logger.warning("Quiz and Judge strategy is disabled. Edge sampling falls back to random.")
+                if (config["partition"]["method"] == "ece" 
+                    and "method_params" in config["partition"]):
+                    config["partition"]["method_params"]["edge_sampling"] = "random"
             
             # 生成数据
             await graph_gen.generate(
