@@ -137,27 +137,55 @@ class CustomGraphGen(GraphGen):
     
     async def insert(self, read_config: Dict = None, split_config: Dict = None):
         """
-        重写插入方法，支持跳过知识图谱构建
+        重写插入方法，支持跳过知识图谱构建和无trainee模式
         """
-        if self.skip_kg_building and self.external_graph_path:
-            logger.info("⏭️  跳过知识图谱构建步骤，使用外部知识图谱")
-            # 直接调用插入完成回调
-            await self._insert_done()
+        if self.skip_kg_building:
+            if self.external_graph_path:
+                logger.info("⏭️  跳过知识图谱构建步骤，使用外部知识图谱")
+                # 直接调用插入完成回调
+                await self._insert_done()
+                return True
+            else:
+                logger.info("⏭️  跳过知识图谱构建步骤（无外部图谱）")
+                return True
+        
+        # 如果需要构建知识图谱，检查参数和客户端
+        if read_config is None or split_config is None:
+            logger.warning("⚠️  read_config 或 split_config 为空，跳过知识图谱构建")
             return True
-        else:
-            # 调用原始的插入方法
-            return await super().insert(read_config, split_config)
+            
+        if self.synthesizer_llm_client is None:
+            logger.warning("⚠️  synthesizer_llm_client 未初始化，跳过知识图谱构建")
+            logger.info("💡 如需构建知识图谱，请设置环境变量: export SYNTHESIZER_API_KEY='your_openai_api_key'")
+            return True
+        
+        # 调用原始的插入方法
+        return await super().insert(read_config, split_config)
     
     async def insert_additional_data(self, read_config: Dict, split_config: Dict):
         """
         在外部知识图谱基础上插入额外数据
         """
+        if self.synthesizer_llm_client is None:
+            logger.warning("⚠️  synthesizer_llm_client 未初始化，跳过额外数据插入")
+            logger.info("💡 如需插入额外数据，请设置环境变量: export SYNTHESIZER_API_KEY='your_openai_api_key'")
+            return
+            
         logger.info("📝 在外部知识图谱基础上插入额外数据...")
         return await super().insert(read_config, split_config)
     
-    async def quiz_and_judge(self, quiz_and_judge_config: Dict):
+    def search(self, search_config: Dict):
+        """
+        重写搜索方法，无trainee模式下仍可正常工作
+        注意：父类的search方法被@async_to_sync_method装饰，所以这里不需要async/await
+        """
+        logger.info("🔍 执行搜索操作（无trainee模式）...")
+        return super().search(search_config)
+    
+    def quiz_and_judge(self, quiz_and_judge_config: Dict):
         """
         重写问答测试方法，无trainee模式下跳过此步骤
+        注意：父类的quiz_and_judge方法被@async_to_sync_method装饰，所以这里不需要async/await
         """
         if self.no_trainee_mode or self.trainee_llm_client is None:
             if self.no_trainee_mode:
@@ -166,7 +194,21 @@ class CustomGraphGen(GraphGen):
                 logger.warning("⚠️  Trainee 客户端未初始化，跳过问答测试和判断步骤")
             return
         
-        return await super().quiz_and_judge(quiz_and_judge_config)
+        return super().quiz_and_judge(quiz_and_judge_config)
+    
+    def generate(self, partition_config: Dict, generate_config: Dict):
+        """
+        重写生成方法，处理无trainee模式和缺少synthesizer客户端的情况
+        注意：父类的generate方法被@async_to_sync_method装饰，所以这里不需要async/await
+        """
+        if self.synthesizer_llm_client is None:
+            logger.error("❌ 无法生成数据：synthesizer_llm_client 未初始化")
+            logger.info("💡 请设置环境变量: export SYNTHESIZER_API_KEY='your_openai_api_key'")
+            logger.info("💡 或者使用简化版生成方案")
+            raise ValueError("synthesizer_llm_client 未初始化，无法进行数据生成")
+        
+        logger.info("🚀 开始生成数据（无trainee模式）...")
+        return super().generate(partition_config, generate_config)
     
     def generate_sync(self, partition_config: Dict, generate_config: Dict):
         """
