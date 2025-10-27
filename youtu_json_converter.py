@@ -20,6 +20,7 @@ class YoutuJSONConverter:
         self.attribute_nodes = {}  # 存储属性节点信息
         self.community_nodes = {}  # 存储社区节点信息
         self.relations = []  # 存储关系信息
+        self.chunks = {}  # 存储 chunk 信息 {chunk_id: chunk_data}
     
     def load_youtu_json_data(self, json_file: str):
         """
@@ -41,6 +42,58 @@ class YoutuJSONConverter:
         
         print(f"加载完成 - 共 {len(data)} 条关系记录")
         return data
+    
+    def load_youtu_chunks(self, chunks_file: str):
+        """
+        加载 youtu-graphrag 的 chunks 文件
+        
+        格式: id: CHUNK_ID\tChunk: {'title': '...', 'content': '...', 'source': '...'}
+        
+        Args:
+            chunks_file: chunks 文件路径 (通常是 text 文件)
+        """
+        print(f"正在加载 youtu-graphrag chunks 数据: {chunks_file}")
+        
+        if not os.path.exists(chunks_file):
+            raise FileNotFoundError(f"Chunks 文件不存在: {chunks_file}")
+        
+        chunks_loaded = 0
+        with open(chunks_file, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    # 解析格式: id: CHUNK_ID\tChunk: {...}
+                    if '\t' in line:
+                        parts = line.split('\t', 1)
+                        if len(parts) == 2:
+                            # 提取 chunk_id
+                            id_part = parts[0].strip()
+                            if id_part.startswith('id:'):
+                                chunk_id = id_part[3:].strip()
+                            else:
+                                chunk_id = id_part
+                            
+                            # 提取 chunk 数据
+                            chunk_part = parts[1].strip()
+                            if chunk_part.startswith('Chunk:'):
+                                chunk_str = chunk_part[6:].strip()
+                                # 使用 eval 或 json.loads 解析字典
+                                try:
+                                    chunk_data = eval(chunk_str)  # 因为是 Python 字典格式
+                                except:
+                                    chunk_data = json.loads(chunk_str)
+                                
+                                self.chunks[chunk_id] = chunk_data
+                                chunks_loaded += 1
+                except Exception as e:
+                    print(f"⚠️  警告: 无法解析第 {line_num} 行: {str(e)[:50]}")
+                    continue
+        
+        print(f"加载完成 - 共 {chunks_loaded} 个 chunks")
+        return chunks_loaded
     
     def parse_youtu_data(self, data: List[Dict]):
         """解析 youtu-graphrag 数据结构"""
@@ -360,6 +413,25 @@ class YoutuJSONConverter:
                 communities_dict[member] = comm_id
         
         return communities_dict
+    
+    def get_chunks_dict(self) -> Dict[str, Dict]:
+        """
+        获取 chunks 字典，用于在生成时提供文档上下文
+        
+        Returns:
+            Dict[str, Dict]: {chunk_id: {'content': ..., 'title': ..., 'source': ...}}
+        """
+        return self.chunks.copy()
+    
+    def export_chunks(self, output_file: str):
+        """导出 chunks 信息为 JSON 格式"""
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(self.chunks, f, ensure_ascii=False, indent=2)
+        
+        print(f"📄 Chunks 信息已导出到: {output_file}")
+        print(f"   - Chunks 数量: {len(self.chunks)}")
+        
+        return self.chunks
 
 
 def main():

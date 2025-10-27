@@ -94,7 +94,14 @@ def setup_environment(disable_quiz: bool = False):
     return True
 
 
-def convert_youtu_json_kg(json_file: str, output_file: str, stats_file: str = None, communities_file: str = None):
+def convert_youtu_json_kg(
+    json_file: str, 
+    output_file: str, 
+    stats_file: str = None, 
+    communities_file: str = None,
+    chunks_file: str = None,
+    chunks_output_file: str = None
+):
     """转换 youtu-graphrag JSON 知识图谱"""
     print("🔄 开始转换 youtu-graphrag JSON 知识图谱...")
     
@@ -102,6 +109,19 @@ def convert_youtu_json_kg(json_file: str, output_file: str, stats_file: str = No
         converter = YoutuJSONConverter()
         data = converter.load_youtu_json_data(json_file)
         converter.parse_youtu_data(data)
+        
+        # 如果提供了 chunks 文件，加载它
+        if chunks_file and os.path.exists(chunks_file):
+            try:
+                converter.load_youtu_chunks(chunks_file)
+                print(f"✅ 已加载 {len(converter.chunks)} 个文档 chunks")
+                
+                # 导出 chunks 信息
+                if chunks_output_file:
+                    converter.export_chunks(chunks_output_file)
+            except Exception as e:
+                print(f"⚠️  加载 chunks 失败: {e}")
+                print("   将继续处理，但不包含文档上下文")
         
         # 检查是否有 GraphML 保存方法
         if hasattr(converter, 'save_to_graphml'):
@@ -139,7 +159,9 @@ async def run_graphgen_with_youtu_json(
     max_depth: int = 3,
     max_extra_edges: int = 5,
     enable_search: bool = False,
-    skip_convert: bool = False
+    skip_convert: bool = False,
+    chunks_file: str = None,
+    add_context: bool = False
 ):
     """使用 youtu-graphrag JSON 知识图谱运行 GraphGen"""
     
@@ -152,7 +174,7 @@ async def run_graphgen_with_youtu_json(
     return await run_full_graphgen(
         json_file, external_graph_path, working_dir, generation_mode, 
         data_format, quiz_samples, disable_quiz, max_depth, 
-        max_extra_edges, enable_search, skip_convert
+        max_extra_edges, enable_search, skip_convert, chunks_file, add_context
     )
 
 
@@ -225,7 +247,9 @@ async def run_full_graphgen(
     max_depth: int = 3,
     max_extra_edges: int = 5,
     enable_search: bool = False,
-    skip_convert: bool = False
+    skip_convert: bool = False,
+    chunks_file: str = None,
+    add_context: bool = False
 ):
     """使用 youtu-graphrag JSON 知识图谱运行 GraphGen"""
     
@@ -238,10 +262,16 @@ async def run_full_graphgen(
     # 如果需要转换且提供了 JSON 文件
     converter = None
     communities_dict = None
+    chunks_dict = None
     if not skip_convert and json_file:
         stats_file = os.path.join(working_dir, "youtu_graph_stats.json")
         communities_file = os.path.join(working_dir, "youtu_communities.json")
-        converter = convert_youtu_json_kg(json_file, external_graph_path, stats_file, communities_file)
+        chunks_output_file = os.path.join(working_dir, "youtu_chunks.json") if chunks_file else None
+        
+        converter = convert_youtu_json_kg(
+            json_file, external_graph_path, stats_file, communities_file,
+            chunks_file, chunks_output_file
+        )
         if not converter:
             return False
         
@@ -250,6 +280,12 @@ async def run_full_graphgen(
             communities_dict = converter.get_communities_dict()
             if communities_dict:
                 print(f"✅ 已提取 {len(set(communities_dict.values()))} 个社区信息，包含 {len(communities_dict)} 个节点")
+        
+        # 提取 chunks 信息（如果启用了 add_context）
+        if add_context and hasattr(converter, 'get_chunks_dict'):
+            chunks_dict = converter.get_chunks_dict()
+            if chunks_dict:
+                print(f"✅ 已提取 {len(chunks_dict)} 个文档 chunks，可用于提供上下文")
     
     # 检查图谱文件是否存在
     if not os.path.exists(external_graph_path):
@@ -285,6 +321,11 @@ async def run_full_graphgen(
     if generation_mode == "cot" and communities_dict:
         config["partition"]["precomputed_communities"] = communities_dict
         print(f"✅ 使用 youtu-graphrag 预计算的社区信息（{len(set(communities_dict.values()))} 个社区）")
+    
+    # 如果启用了 add_context 且有 chunks，添加到配置中
+    if add_context and chunks_dict:
+        config["partition"]["chunks_context"] = chunks_dict
+        print(f"✅ 启用文档上下文功能（{len(chunks_dict)} 个 chunks 可用）")
     
     # 如果启用搜索，更新配置
     if enable_search:
@@ -325,6 +366,11 @@ async def run_full_graphgen(
             read_config=config["read"], 
             split_config=config["split"]
         )
+        
+        # 步骤1.5: 如果启用了 add_context，加载 chunks 到存储
+        if add_context and chunks_dict:
+            print("📄 步骤1.5: 加载文档 chunks 上下文...")
+            await graph_gen.load_chunks_context(chunks_dict)
         
         # 显示图谱摘要
         summary = graph_gen.get_graph_summary()
@@ -432,6 +478,7 @@ def main():
     # 输入文件参数
     parser.add_argument('--json', help='youtu-graphrag JSON 文件路径')
     parser.add_argument('--external-graph', help='已转换的 GraphML 文件路径')
+    parser.add_argument('--chunks', help='youtu-graphrag chunks 文件路径 (通常是 text 文件)')
     
     # 输出参数
     parser.add_argument('--working-dir', default='cache', help='工作目录 (默认: cache)')
@@ -447,6 +494,7 @@ def main():
     parser.add_argument('--max-depth', type=int, default=3, help='最大遍历深度 (默认: 3)')
     parser.add_argument('--max-extra-edges', type=int, default=5, help='最大额外边数 (默认: 5)')
     parser.add_argument('--enable-search', action='store_true', help='启用搜索增强')
+    parser.add_argument('--add-context', action='store_true', help='在生成时添加原始文档上下文')
     
     # 控制参数
     parser.add_argument('--skip-convert', action='store_true', help='跳过转换步骤')
@@ -486,7 +534,9 @@ def main():
             max_depth=args.max_depth,
             max_extra_edges=args.max_extra_edges,
             enable_search=args.enable_search,
-            skip_convert=args.skip_convert
+            skip_convert=args.skip_convert,
+            chunks_file=args.chunks,
+            add_context=args.add_context
         ))
     except RuntimeError as e:
         if "event loop is already running" in str(e):
