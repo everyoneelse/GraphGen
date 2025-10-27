@@ -59,7 +59,7 @@ def _post_process_answers(content: str) -> tuple:
 @dataclass
 class SelfQA:
     llm_client: OpenAIClient = None
-    max_concurrent: int = 100
+    max_concurrent: int = 20
 
     def generate(self, docs: List[List[dict]]) -> List[dict]:
         loop = create_event_loop()

@@ -13,7 +13,7 @@ async def quiz(
     graph_storage: NetworkXStorage,
     rephrase_storage: JsonKVStorage,
     max_samples: int = 1,
-    max_concurrent: int = 1000,
+    max_concurrent: int = 20,
 ) -> JsonKVStorage:
     """
     Get all edges and quiz them

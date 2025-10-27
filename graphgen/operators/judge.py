@@ -13,7 +13,7 @@ async def judge_statement(  # pylint: disable=too-many-statements
     graph_storage: NetworkXStorage,
     rephrase_storage: JsonKVStorage,
     re_judge: bool = False,
-    max_concurrent: int = 1000,
+    max_concurrent: int = 20,
 ) -> NetworkXStorage:
     """
     Get all edges and nodes and judge them

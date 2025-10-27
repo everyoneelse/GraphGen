@@ -9,7 +9,7 @@ from graphgen.utils import create_event_loop
 
 @dataclass
 class BaseEvaluator:
-    max_concurrent: int = 100
+    max_concurrent: int = 20
     results: list[float] = None
 
     def evaluate(self, pairs: list[QAPair]) -> list[float]:
