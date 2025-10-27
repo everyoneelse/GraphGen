@@ -99,36 +99,66 @@ def format_generation_results(
 ) -> list[dict[str, Any]]:
     if output_data_format == "Alpaca":
         logger.info("Output data format: Alpaca")
-        results = [
-            {
+        formatted_results = []
+        for item in list(results.values()):
+            formatted_item = {
                 "instruction": item["question"],
                 "input": "",
                 "output": item["answer"],
             }
-            for item in list(results.values())
-        ]
+            # 保留中间步骤信息
+            if "intermediate_steps" in item:
+                formatted_item["intermediate_steps"] = item["intermediate_steps"]
+            # 保留reasoning_path（用于CoT模式）
+            if "reasoning_path" in item:
+                formatted_item["reasoning_path"] = item["reasoning_path"]
+            # 保留loss信息
+            if "loss" in item:
+                formatted_item["loss"] = item["loss"]
+            formatted_results.append(formatted_item)
+        results = formatted_results
     elif output_data_format == "Sharegpt":
         logger.info("Output data format: Sharegpt")
-        results = [
-            {
+        formatted_results = []
+        for item in list(results.values()):
+            formatted_item = {
                 "conversations": [
                     {"from": "human", "value": item["question"]},
                     {"from": "gpt", "value": item["answer"]},
                 ]
             }
-            for item in list(results.values())
-        ]
+            # 保留中间步骤信息
+            if "intermediate_steps" in item:
+                formatted_item["intermediate_steps"] = item["intermediate_steps"]
+            # 保留reasoning_path（用于CoT模式）
+            if "reasoning_path" in item:
+                formatted_item["reasoning_path"] = item["reasoning_path"]
+            # 保留loss信息
+            if "loss" in item:
+                formatted_item["loss"] = item["loss"]
+            formatted_results.append(formatted_item)
+        results = formatted_results
     elif output_data_format == "ChatML":
         logger.info("Output data format: ChatML")
-        results = [
-            {
+        formatted_results = []
+        for item in list(results.values()):
+            formatted_item = {
                 "messages": [
                     {"role": "user", "content": item["question"]},
                     {"role": "assistant", "content": item["answer"]},
                 ]
             }
-            for item in list(results.values())
-        ]
+            # 保留中间步骤信息
+            if "intermediate_steps" in item:
+                formatted_item["intermediate_steps"] = item["intermediate_steps"]
+            # 保留reasoning_path（用于CoT模式）
+            if "reasoning_path" in item:
+                formatted_item["reasoning_path"] = item["reasoning_path"]
+            # 保留loss信息
+            if "loss" in item:
+                formatted_item["loss"] = item["loss"]
+            formatted_results.append(formatted_item)
+        results = formatted_results
     else:
         raise ValueError(f"Unknown output data format: {output_data_format}")
     return results
