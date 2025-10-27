@@ -94,7 +94,7 @@ def setup_environment(disable_quiz: bool = False):
     return True
 
 
-def convert_youtu_json_kg(json_file: str, output_file: str, stats_file: str = None):
+def convert_youtu_json_kg(json_file: str, output_file: str, stats_file: str = None, communities_file: str = None):
     """转换 youtu-graphrag JSON 知识图谱"""
     print("🔄 开始转换 youtu-graphrag JSON 知识图谱...")
     
@@ -116,12 +116,16 @@ def convert_youtu_json_kg(json_file: str, output_file: str, stats_file: str = No
         if stats_file and hasattr(converter, 'export_statistics'):
             converter.export_statistics(stats_file)
         
-        return True
+        # 导出社区信息
+        if communities_file and hasattr(converter, 'export_communities'):
+            converter.export_communities(communities_file)
+        
+        return converter
     except Exception as e:
         print(f"❌ 转换失败: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return None
 
 
 async def run_graphgen_with_youtu_json(
@@ -232,10 +236,20 @@ async def run_full_graphgen(
         external_graph_path = os.path.join(working_dir, "youtu_graph.graphml")
     
     # 如果需要转换且提供了 JSON 文件
+    converter = None
+    communities_dict = None
     if not skip_convert and json_file:
         stats_file = os.path.join(working_dir, "youtu_graph_stats.json")
-        if not convert_youtu_json_kg(json_file, external_graph_path, stats_file):
+        communities_file = os.path.join(working_dir, "youtu_communities.json")
+        converter = convert_youtu_json_kg(json_file, external_graph_path, stats_file, communities_file)
+        if not converter:
             return False
+        
+        # 提取社区信息（如果用于 COT 模式）
+        if generation_mode == "cot" and hasattr(converter, 'get_communities_dict'):
+            communities_dict = converter.get_communities_dict()
+            if communities_dict:
+                print(f"✅ 已提取 {len(set(communities_dict.values()))} 个社区信息，包含 {len(communities_dict)} 个节点")
     
     # 检查图谱文件是否存在
     if not os.path.exists(external_graph_path):
@@ -266,6 +280,11 @@ async def run_full_graphgen(
             config["partition"]["method_params"]["edge_sampling"] = "random"
         print("⏭️  问答测试和判断已禁用")
         print("⏭️  边采样策略已设为 random（因为没有loss属性）")
+    
+    # 如果是 COT 模式且有预计算的社区，添加到配置中
+    if generation_mode == "cot" and communities_dict:
+        config["partition"]["precomputed_communities"] = communities_dict
+        print(f"✅ 使用 youtu-graphrag 预计算的社区信息（{len(set(communities_dict.values()))} 个社区）")
     
     # 如果启用搜索，更新配置
     if enable_search:

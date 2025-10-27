@@ -18,6 +18,7 @@ class YoutuJSONConverter:
         self.graph = nx.Graph()
         self.entity_nodes = {}  # 存储实体节点信息
         self.attribute_nodes = {}  # 存储属性节点信息
+        self.community_nodes = {}  # 存储社区节点信息
         self.relations = []  # 存储关系信息
     
     def load_youtu_json_data(self, json_file: str):
@@ -78,6 +79,15 @@ class YoutuJSONConverter:
                     'chunk_id': end_props.get('chunk id', ''),
                     'properties': end_props
                 }
+            elif end_label == 'community' and end_name:
+                # 解析社区节点
+                self.community_nodes[end_name] = {
+                    'name': end_name,
+                    'label': end_label,
+                    'description': end_props.get('description', ''),
+                    'members': end_props.get('members', []),
+                    'properties': end_props
+                }
             elif end_label == 'entity' and end_name:
                 self.entity_nodes[end_name] = {
                     'name': end_name,
@@ -100,6 +110,7 @@ class YoutuJSONConverter:
         print(f"解析完成:")
         print(f"  - 实体节点: {len(self.entity_nodes)}")
         print(f"  - 属性节点: {len(self.attribute_nodes)}")
+        print(f"  - 社区节点: {len(self.community_nodes)}")
         print(f"  - 关系: {len(self.relations)}")
     
     def convert_to_graphgen_format(self):
@@ -293,7 +304,8 @@ class YoutuJSONConverter:
             },
             'entity_types': {},
             'relation_types': {},
-            'chunk_distribution': {}
+            'chunk_distribution': {},
+            'communities': len(self.community_nodes)
         }
         
         # 统计实体类型
@@ -315,6 +327,39 @@ class YoutuJSONConverter:
             json.dump(stats, f, ensure_ascii=False, indent=2)
         
         print(f"📊 统计信息已导出到: {output_file}")
+    
+    def export_communities(self, output_file: str):
+        """导出社区信息为JSON格式"""
+        communities_data = []
+        for comm_name, comm_data in self.community_nodes.items():
+            communities_data.append({
+                'name': comm_name,
+                'description': comm_data['description'],
+                'members': comm_data['members'],
+                'member_count': len(comm_data['members'])
+            })
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(communities_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"🏘️  社区信息已导出到: {output_file}")
+        print(f"   - 社区数量: {len(communities_data)}")
+        
+        return communities_data
+    
+    def get_communities_dict(self) -> Dict[str, int]:
+        """
+        将社区信息转换为 CommunityDetector 格式
+        返回: {node_name: community_id} 的字典
+        """
+        communities_dict = {}
+        
+        for comm_id, (comm_name, comm_data) in enumerate(self.community_nodes.items()):
+            members = comm_data.get('members', [])
+            for member in members:
+                communities_dict[member] = comm_id
+        
+        return communities_dict
 
 
 def main():

@@ -268,10 +268,13 @@ class GraphGen:
                 self.progress_bar,
             )
         elif mode == "cot":
+            # 检查是否有预计算的社区信息
+            precomputed_communities = partition_config.get("precomputed_communities")
             results = await generate_cot(
                 self.graph_storage,
                 self.synthesizer_llm_client,
                 method_params=partition_config["method_params"],
+                precomputed_communities=precomputed_communities,
             )
         else:
             raise ValueError(f"Unknown generation mode: {mode}")
