@@ -100,7 +100,7 @@ async def generate_synthetic_data_for_document(input_file, data_type):
     model_name = os.getenv("SYNTHESIZER_MODEL")
     task = BaselineTask(input_file, data_type)
 
-    max_concurrent = 1000
+    max_concurrent = 20
     semaphore = asyncio.Semaphore(max_concurrent)
 
     async def generate_document_entities(doc):

@@ -18,7 +18,7 @@ async def _pre_tokenize(
     graph_storage: NetworkXStorage, tokenizer: Tokenizer, edges: list, nodes: list
 ) -> tuple:
 
-    sem = asyncio.Semaphore(1000)
+    sem = asyncio.Semaphore(20)
 
     async def handle_edge(edge: tuple) -> tuple:
         async with sem:
@@ -162,7 +162,7 @@ async def traverse_graph_for_aggregated(
     traverse_strategy: Dict,
     text_chunks_storage: JsonKVStorage,
     progress_bar: gr.Progress = None,
-    max_concurrent: int = 1000,
+    max_concurrent: int = 20,
 ) -> dict:
     """
     Traverse the graph
@@ -311,7 +311,7 @@ async def traverse_graph_for_atomic(
     traverse_strategy: Dict,
     text_chunks_storage: JsonKVStorage,
     progress_bar: gr.Progress = None,
-    max_concurrent: int = 1000,
+    max_concurrent: int = 20,
 ) -> dict:
     """
     Traverse the graph atomicly
@@ -426,7 +426,7 @@ async def traverse_graph_for_multi_hop(
     traverse_strategy: Dict,
     text_chunks_storage: JsonKVStorage,
     progress_bar: gr.Progress = None,
-    max_concurrent: int = 1000,
+    max_concurrent: int = 20,
 ) -> dict:
     """
     Traverse the graph for multi-hop

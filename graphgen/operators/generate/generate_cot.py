@@ -30,7 +30,7 @@ async def generate_cot(
     if not communities:
         return {}
 
-    semaphore = asyncio.Semaphore(value=1000)
+    semaphore = asyncio.Semaphore(value=20)
 
     async def _generate_from_single_community(
         c_id: int, nodes: List[str]

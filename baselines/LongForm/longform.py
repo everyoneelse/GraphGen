@@ -24,7 +24,7 @@ X:"""
 @dataclass
 class LongForm:
     llm_client: OpenAIClient = None
-    max_concurrent: int = 1000
+    max_concurrent: int = 20
 
     def generate(self, docs: List[List[dict]]) -> List[dict]:
         loop = create_event_loop()
