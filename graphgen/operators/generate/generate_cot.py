@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple
 from tqdm.asyncio import tqdm as tqdm_async
 
 from graphgen.models import CommunityDetector, NetworkXStorage, OpenAIClient
+from graphgen.models.community import PrecomputedCommunityDetector
 from graphgen.templates import COT_GENERATION_PROMPT, COT_TEMPLATE_DESIGN_PROMPT
 from graphgen.utils import compute_content_hash, detect_main_language
 
@@ -12,13 +13,34 @@ async def generate_cot(
     graph_storage: NetworkXStorage,
     synthesizer_llm_client: OpenAIClient,
     method_params: Dict = None,
+    precomputed_communities: Dict[str, int] = None,
 ):
-    method = method_params.get("method", "leiden")
-    detector = CommunityDetector(
-        graph_storage=graph_storage, method=method, method_params=method_params
-    )
-
-    results = await detector.detect_communities()
+    """
+    生成 COT (Chain-of-Thought) 数据
+    
+    Args:
+        graph_storage: 图存储
+        synthesizer_llm_client: LLM 客户端
+        method_params: 方法参数
+        precomputed_communities: 预计算的社区信息 {node_name: community_id}
+                                如果提供，将使用这些社区而不是重新检测
+    """
+    # 如果提供了预计算的社区，使用 PrecomputedCommunityDetector
+    if precomputed_communities:
+        detector = PrecomputedCommunityDetector(
+            graph_storage=graph_storage,
+            precomputed_communities=precomputed_communities,
+            method="precomputed",
+            method_params=method_params or {}
+        )
+        results = await detector.detect_communities()
+    else:
+        # 否则使用默认的社区检测算法
+        method = method_params.get("method", "leiden") if method_params else "leiden"
+        detector = CommunityDetector(
+            graph_storage=graph_storage, method=method, method_params=method_params or {}
+        )
+        results = await detector.detect_communities()
 
     # Convert results to a format suitable for summarization
     communities = {}

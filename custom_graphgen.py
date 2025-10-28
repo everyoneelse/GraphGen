@@ -287,6 +287,45 @@ class CustomGraphGen(GraphGen):
             json.dump(summary, f, ensure_ascii=False, indent=2)
         
         logger.info(f"📊 图谱统计信息已导出到: {output_file}")
+    
+    async def load_chunks_context(self, chunks_dict: Dict[str, Dict]):
+        """
+        加载 chunks 上下文到 text_chunks_storage
+        
+        Args:
+            chunks_dict: {chunk_id: {'title': ..., 'content': ..., 'source': ...}}
+        """
+        if not chunks_dict:
+            logger.warning("⚠️  Chunks 字典为空，跳过加载")
+            return
+        
+        logger.info(f"📄 正在加载 {len(chunks_dict)} 个文档 chunks 到存储...")
+        
+        # 转换格式并保存到 text_chunks_storage
+        chunks_to_save = {}
+        for chunk_id, chunk_data in chunks_dict.items():
+            # 构建完整的内容
+            content_parts = []
+            if 'title' in chunk_data and chunk_data['title']:
+                content_parts.append(f"标题: {chunk_data['title']}")
+            if 'content' in chunk_data and chunk_data['content']:
+                content_parts.append(chunk_data['content'])
+            if 'source' in chunk_data and chunk_data['source']:
+                content_parts.append(f"\n来源: {chunk_data['source']}")
+            
+            full_content = "\n".join(content_parts)
+            
+            chunks_to_save[chunk_id] = {
+                'content': full_content,
+                'title': chunk_data.get('title', ''),
+                'source': chunk_data.get('source', ''),
+            }
+        
+        # 保存到存储
+        await self.text_chunks_storage.upsert(chunks_to_save)
+        await self.text_chunks_storage.index_done_callback()
+        
+        logger.info(f"✅ 已加载 {len(chunks_to_save)} 个 chunks 到存储")
 
 
 def create_custom_config(
