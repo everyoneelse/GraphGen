@@ -295,7 +295,8 @@ def create_custom_config(
     data_format: str = "Alpaca",
     quiz_samples: int = 5,
     max_depth: int = 3,
-    max_extra_edges: int = 5
+    max_extra_edges: int = 5,
+    no_trainee_mode: bool = True
 ) -> Dict:
     """
     创建适用于外部知识图谱的配置
@@ -307,6 +308,7 @@ def create_custom_config(
         quiz_samples: 测试样本数量
         max_depth: 最大遍历深度
         max_extra_edges: 最大额外边数
+        no_trainee_mode: 是否为无trainee模式
     """
     config = {
         "read": {
@@ -329,7 +331,7 @@ def create_custom_config(
             "method": "ece",
             "method_params": {
                 "bidirectional": True,
-                "edge_sampling": "max_loss",
+                "edge_sampling": "random" if no_trainee_mode else "max_loss",
                 "expand_method": "max_width",
                 "isolated_node_strategy": "ignore",
                 "max_depth": max_depth,
@@ -368,7 +370,8 @@ if __name__ == "__main__":
             data_format="Alpaca",
             quiz_samples=3,
             max_depth=2,
-            max_extra_edges=3
+            max_extra_edges=3,
+            no_trainee_mode=True  # 示例使用无trainee模式
         )
         
         # 创建自定义 GraphGen 实例

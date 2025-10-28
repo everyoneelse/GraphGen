@@ -117,7 +117,8 @@ async def test_qa_generation():
             data_format="Alpaca",
             quiz_samples=2,  # 减少样本数量以加快测试
             max_depth=2,     # 减少深度
-            max_extra_edges=2  # 减少边数
+            max_extra_edges=2,  # 减少边数
+            no_trainee_mode=True  # 测试使用无trainee模式
         )
         
         # 创建 GraphGen 实例
