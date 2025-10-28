@@ -14,9 +14,10 @@ def readme():
 
 
 def get_version():
+    version_dict = {}
     with open(os.path.join(pwd, version_file), "r") as f:
-        exec(compile(f.read(), version_file, "exec"))
-    return locals()["__version__"]
+        exec(compile(f.read(), version_file, "exec"), version_dict)
+    return version_dict["__version__"]
 
 
 def read_requirements():

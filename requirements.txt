@@ -3,7 +3,7 @@ openai
 python-dotenv
 numpy
 networkx
-graspologic
+# graspologic  # Temporarily disabled due to gensim compatibility issues with Python 3.13
 tiktoken
 pyecharts
 wikipedia
@@ -19,6 +19,7 @@ langcodes
 requests
 fastapi
 trafilatura
+lxml_html_clean
 
 leidenalg
 igraph
