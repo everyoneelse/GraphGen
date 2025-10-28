@@ -183,6 +183,7 @@ async def traverse_graph_for_aggregated(
         _process_nodes: list,
         _process_edges: list,
     ) -> str:
+        # This function is kept for backward compatibility but not used in new implementation
         prompt = await _construct_rephrasing_prompt(
             _process_nodes, _process_edges, text_chunks_storage, add_context=False
         )
@@ -200,10 +201,19 @@ async def traverse_graph_for_aggregated(
         _process_batch: tuple, question_type: str = "single"
     ) -> dict:
         async with semaphore:
-            context = await _process_nodes_and_edges(
-                _process_batch[0],
-                _process_batch[1],
+            # 保存重述prompt
+            rephrasing_prompt = await _construct_rephrasing_prompt(
+                _process_batch[0], _process_batch[1], text_chunks_storage, add_context=False
             )
+            
+            context = await llm_client.generate_answer(rephrasing_prompt)
+
+            # post-process the context
+            raw_context_response = context
+            if context.startswith("Rephrased Text:"):
+                context = context[len("Rephrased Text:") :].strip()
+            elif context.startswith("重述文本:"):
+                context = context[len("重述文本:") :].strip()
 
             language = "Chinese" if detect_main_language(context) == "zh" else "English"
             pre_length = sum(node["length"] for node in _process_batch[0]) + sum(
@@ -211,11 +221,14 @@ async def traverse_graph_for_aggregated(
             )
 
             if question_type == "single":
-                question = await llm_client.generate_answer(
-                    QUESTION_GENERATION_PROMPT[language]["SINGLE_TEMPLATE"].format(
-                        answer=context
-                    )
+                # 保存问题生成prompt
+                question_generation_prompt = QUESTION_GENERATION_PROMPT[language]["SINGLE_TEMPLATE"].format(
+                    answer=context
                 )
+                
+                question = await llm_client.generate_answer(question_generation_prompt)
+                
+                raw_question_response = question
                 if question.startswith("Question:"):
                     question = question[len("Question:") :].strip()
                 elif question.startswith("问题："):
@@ -230,6 +243,16 @@ async def traverse_graph_for_aggregated(
                 logger.info("Question: %s", question)
                 logger.info("Answer: %s", context)
 
+                # 收集实体和关系信息用于中间步骤
+                entities_info = [
+                    f"{node['node_id']}: {node['description']}"
+                    for node in _process_batch[0]
+                ]
+                relations_info = [
+                    f"{edge[0]} -- {edge[1]}: {edge[2]['description']}"
+                    for edge in _process_batch[1]
+                ]
+
                 return {
                     compute_content_hash(context): {
                         "question": question,
@@ -237,14 +260,24 @@ async def traverse_graph_for_aggregated(
                         "loss": get_average_loss(
                             _process_batch, traverse_strategy["loss_strategy"]
                         ),
+                        "intermediate_steps": {
+                            "mode": "aggregated",
+                            "entities": entities_info,
+                            "relationships": relations_info,
+                            "step1_rephrasing_prompt": rephrasing_prompt,
+                            "step1_rephrased_context": raw_context_response,
+                            "step2_question_generation_prompt": question_generation_prompt,
+                            "step2_generated_question": raw_question_response,
+                        }
                     }
                 }
 
-            content = await llm_client.generate_answer(
-                QUESTION_GENERATION_PROMPT[language]["MULTI_TEMPLATE"].format(
-                    doc=context
-                )
+            # 保存多问答生成prompt
+            multi_qa_generation_prompt = QUESTION_GENERATION_PROMPT[language]["MULTI_TEMPLATE"].format(
+                doc=context
             )
+            
+            content = await llm_client.generate_answer(multi_qa_generation_prompt)
             qas = _post_process_synthetic_data(content)
 
             if len(qas) == 0:
@@ -252,6 +285,16 @@ async def traverse_graph_for_aggregated(
                     "Error occurred while processing batch, question or answer is None"
                 )
                 return {}
+
+            # 收集实体和关系信息用于中间步骤
+            entities_info = [
+                f"{node['node_id']}: {node['description']}"
+                for node in _process_batch[0]
+            ]
+            relations_info = [
+                f"{edge[0]} -- {edge[1]}: {edge[2]['description']}"
+                for edge in _process_batch[1]
+            ]
 
             final_results = {}
             logger.info(
@@ -269,6 +312,15 @@ async def traverse_graph_for_aggregated(
                     "loss": get_average_loss(
                         _process_batch, traverse_strategy["loss_strategy"]
                     ),
+                    "intermediate_steps": {
+                        "mode": "aggregated_multi",
+                        "entities": entities_info,
+                        "relationships": relations_info,
+                        "step1_rephrasing_prompt": rephrasing_prompt,
+                        "step1_rephrased_context": raw_context_response,
+                        "step2_multi_qa_generation_prompt": multi_qa_generation_prompt,
+                        "step2_raw_multi_qa_response": content,
+                    }
                 }
             return final_results
 
@@ -351,11 +403,12 @@ async def traverse_graph_for_atomic(
             try:
                 language = "Chinese" if detect_main_language(des) == "zh" else "English"
 
-                qa = await llm_client.generate_answer(
-                    QUESTION_GENERATION_PROMPT[language]["SINGLE_QA_TEMPLATE"].format(
-                        doc=des
-                    )
+                # 保存生成问答的prompt
+                qa_generation_prompt = QUESTION_GENERATION_PROMPT[language]["SINGLE_QA_TEMPLATE"].format(
+                    doc=des
                 )
+                
+                qa = await llm_client.generate_answer(qa_generation_prompt)
 
                 question, answer = _parse_qa(qa)
                 if question is None or answer is None:
@@ -371,6 +424,12 @@ async def traverse_graph_for_atomic(
                         "question": question,
                         "answer": answer,
                         "loss": loss,
+                        "intermediate_steps": {
+                            "mode": "atomic",
+                            "input_description": des,
+                            "qa_generation_prompt": qa_generation_prompt,
+                            "raw_qa_response": qa,
+                        }
                     }
                 }
             except Exception as e:  # pylint: disable=broad-except
@@ -484,11 +543,15 @@ async def traverse_graph_for_multi_hop(
                     ]
                 )
 
-                prompt = MULTI_HOP_GENERATION_PROMPT[language].format(
+                # 保存多跳问答生成prompt
+                multi_hop_generation_prompt = MULTI_HOP_GENERATION_PROMPT[language].format(
                     entities=entities_str, relationships=relations_str
                 )
 
-                context = await llm_client.generate_answer(prompt)
+                context = await llm_client.generate_answer(multi_hop_generation_prompt)
+
+                # 保存原始响应
+                raw_response = context
 
                 # post-process the context
                 if "Question:" in context and "Answer:" in context:
@@ -513,6 +576,15 @@ async def traverse_graph_for_multi_hop(
                         "loss": get_average_loss(
                             _process_batch, traverse_strategy["loss_strategy"]
                         ),
+                        "intermediate_steps": {
+                            "mode": "multi_hop",
+                            "entities": entities,
+                            "relationships": relations,
+                            "entities_formatted": entities_str,
+                            "relationships_formatted": relations_str,
+                            "multi_hop_generation_prompt": multi_hop_generation_prompt,
+                            "raw_response": raw_response,
+                        }
                     }
                 }
 

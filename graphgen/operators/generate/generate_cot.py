@@ -56,7 +56,7 @@ async def generate_cot(
 
     async def _generate_from_single_community(
         c_id: int, nodes: List[str]
-    ) -> Tuple[int, Tuple[str, str, str]]:
+    ) -> Tuple[int, Tuple[str, str, str, Dict]]:
         """Summarize a single community."""
         async with semaphore:
             entities: List[str] = []
@@ -85,12 +85,13 @@ async def generate_cot(
                 else "Chinese"
             )
 
-            prompt = COT_TEMPLATE_DESIGN_PROMPT[language]["TEMPLATE"].format(
+            # 步骤1: 生成问题和推理路径设计
+            template_design_prompt = COT_TEMPLATE_DESIGN_PROMPT[language]["TEMPLATE"].format(
                 entities=entities_str,
                 relationships=relationships_str,
             )
 
-            cot_template = await synthesizer_llm_client.generate_answer(prompt)
+            cot_template = await synthesizer_llm_client.generate_answer(template_design_prompt)
 
             if "问题：" in cot_template and "推理路径设计：" in cot_template:
                 question = cot_template.split("问题：")[1].split("推理路径设计：")[0].strip()
@@ -107,16 +108,33 @@ async def generate_cot(
             else:
                 raise ValueError("COT template format is incorrect.")
 
-            prompt = COT_GENERATION_PROMPT[language]["TEMPLATE"].format(
+            # 步骤2: 生成最终答案
+            answer_generation_prompt = COT_GENERATION_PROMPT[language]["TEMPLATE"].format(
                 entities=entities_str,
                 relationships=relationships_str,
                 question=question,
                 reasoning_template=reasoning_path,
             )
 
-            cot_answer = await synthesizer_llm_client.generate_answer(prompt)
+            cot_answer = await synthesizer_llm_client.generate_answer(answer_generation_prompt)
 
-            return c_id, (question, reasoning_path, cot_answer)
+            # 保存中间步骤
+            intermediate_steps = {
+                "mode": "cot",
+                "community_id": c_id,
+                "entities": entities,
+                "relationships": relationships,
+                "entities_str": entities_str,
+                "relationships_str": relationships_str,
+                "step1_template_design_prompt": template_design_prompt,
+                "step1_template_design_response": cot_template,
+                "step1_extracted_question": question,
+                "step1_extracted_reasoning_path": reasoning_path,
+                "step2_answer_generation_prompt": answer_generation_prompt,
+                "step2_final_answer": cot_answer,
+            }
+
+            return c_id, (question, reasoning_path, cot_answer, intermediate_steps)
 
     cid_nodes = list(communities.items())
 
@@ -129,11 +147,12 @@ async def generate_cot(
         desc="[Generating COT] Generating CoT data from communities",
         unit="community",
     ):
-        cid, (q, r, a) = await coro
+        cid, (q, r, a, intermediate) = await coro
         results[compute_content_hash(q)] = {
             "question": q,
             "reasoning_path": r,
             "answer": a,
+            "intermediate_steps": intermediate,
         }
 
     return results
